@@ -2073,7 +2073,7 @@ dependencies = [
 
 [[package]]
 name = "ytmusic-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "crossterm 0.29.0",
