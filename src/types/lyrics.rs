@@ -70,7 +70,11 @@ impl LyricsData {
             return synced.into_iter().map(|line| line.text).collect();
         }
 
-        if let Some(plain) = self.plain_lyrics.as_deref().filter(|s| !s.trim().is_empty()) {
+        if let Some(plain) = self
+            .plain_lyrics
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
             return plain
                 .lines()
                 .map(str::trim)
@@ -126,7 +130,10 @@ pub fn parse_lrc(input: &str) -> Vec<SyncedLine> {
 
         let text = rest.trim().to_string();
         for time_ms in times {
-            out.push(SyncedLine { time_ms, text: text.clone() });
+            out.push(SyncedLine {
+                time_ms,
+                text: text.clone(),
+            });
         }
     }
 

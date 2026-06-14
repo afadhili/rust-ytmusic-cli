@@ -6,7 +6,10 @@ use serde::Deserialize;
 
 use crate::{
     services::{music::MusicService, storage::StorageService},
-    types::{lyrics::{LyricsData, LyricsSource}, track::Track},
+    types::{
+        lyrics::{LyricsData, LyricsSource},
+        track::Track,
+    },
 };
 
 #[derive(Debug, Deserialize)]
@@ -125,8 +128,12 @@ impl LyricsService {
     }
 
     pub fn write_cached_lyrics(&self, lyrics: &LyricsData) -> anyhow::Result<()> {
-        fs::create_dir_all(&self.cache_dir)
-            .with_context(|| format!("failed to create lyrics cache dir: {}", self.cache_dir.display()))?;
+        fs::create_dir_all(&self.cache_dir).with_context(|| {
+            format!(
+                "failed to create lyrics cache dir: {}",
+                self.cache_dir.display()
+            )
+        })?;
 
         let path = self.cache_path(&lyrics.video_id);
         let data = format_cached_lyrics_file(lyrics);
@@ -146,7 +153,8 @@ impl LyricsService {
             params.push(("duration", duration));
         }
 
-        let res = self.client
+        let res = self
+            .client
             .get("https://lrclib.net/api/get")
             .query(&params)
             .send()
@@ -171,7 +179,8 @@ impl LyricsService {
 
     async fn fetch_lrclib_search(&self, track: &Track) -> anyhow::Result<Option<LyricsData>> {
         let query = format!("{} {}", track.artist, track.title);
-        let res = self.client
+        let res = self
+            .client
             .get("https://lrclib.net/api/search")
             .query(&[("q", query.as_str())])
             .send()
@@ -206,17 +215,29 @@ impl LyricsService {
             {
                 score += 25;
             }
-            if item.synced_lyrics.as_deref().is_some_and(|lyrics| !lyrics.trim().is_empty()) {
+            if item
+                .synced_lyrics
+                .as_deref()
+                .is_some_and(|lyrics| !lyrics.trim().is_empty())
+            {
                 score += 20;
             }
-            if item.plain_lyrics.as_deref().is_some_and(|lyrics| !lyrics.trim().is_empty()) {
+            if item
+                .plain_lyrics
+                .as_deref()
+                .is_some_and(|lyrics| !lyrics.trim().is_empty())
+            {
                 score += 8;
             }
             if let (Some(expected), Some(actual)) = (track.duration, item.duration) {
                 let diff = (expected as f64 - actual).abs();
-                if diff <= 2.0 { score += 12; }
-                else if diff <= 5.0 { score += 6; }
-                else if diff > 15.0 { score -= 20; }
+                if diff <= 2.0 {
+                    score += 12;
+                } else if diff <= 5.0 {
+                    score += 6;
+                } else if diff > 15.0 {
+                    score -= 20;
+                }
             }
 
             score
@@ -257,7 +278,11 @@ impl LyricsService {
 fn format_cached_lyrics_file(lyrics: &LyricsData) -> String {
     let kind = if lyrics.instrumental {
         "instrumental"
-    } else if lyrics.synced_lyrics.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+    } else if lyrics
+        .synced_lyrics
+        .as_deref()
+        .is_some_and(|s| !s.trim().is_empty())
+    {
         "synced"
     } else {
         "plain"
@@ -266,8 +291,14 @@ fn format_cached_lyrics_file(lyrics: &LyricsData) -> String {
     let mut out = String::new();
     out.push_str("# ytmusic-cli lyrics cache v1\n");
     out.push_str(&format!("# video_id: {}\n", lyrics.video_id));
-    out.push_str(&format!("# track_name: {}\n", lyrics.track_name.replace('\n', " ")));
-    out.push_str(&format!("# artist_name: {}\n", lyrics.artist_name.replace('\n', " ")));
+    out.push_str(&format!(
+        "# track_name: {}\n",
+        lyrics.track_name.replace('\n', " ")
+    ));
+    out.push_str(&format!(
+        "# artist_name: {}\n",
+        lyrics.artist_name.replace('\n', " ")
+    ));
     if let Some(album) = lyrics.album_name.as_deref() {
         out.push_str(&format!("# album_name: {}\n", album.replace('\n', " ")));
     }
@@ -280,10 +311,18 @@ fn format_cached_lyrics_file(lyrics: &LyricsData) -> String {
 
     if lyrics.instrumental {
         out.push_str("Instrumental\n");
-    } else if let Some(synced) = lyrics.synced_lyrics.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if let Some(synced) = lyrics
+        .synced_lyrics
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
         out.push_str(synced.trim());
         out.push('\n');
-    } else if let Some(plain) = lyrics.plain_lyrics.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if let Some(plain) = lyrics
+        .plain_lyrics
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
         out.push_str(plain.trim());
         out.push('\n');
     }
@@ -340,7 +379,11 @@ fn parse_cached_lyrics_file(video_id: &str, data: &str) -> Option<LyricsData> {
         duration,
         instrumental: kind == "instrumental",
         source,
-        plain_lyrics: if kind == "plain" { Some(text.clone()) } else { None },
+        plain_lyrics: if kind == "plain" {
+            Some(text.clone())
+        } else {
+            None
+        },
         synced_lyrics: if kind == "synced" { Some(text) } else { None },
     })
 }

@@ -94,4 +94,3 @@ q/Esc    quit
 Auto refill uses a session-level `queued_video_ids` set. A track that was already added to the queue, played in the current session, or exists in previous/current queue state will not be added again by `fetch_watch_queue()`.
 
 Playlist playback does not call `fetch_watch_queue()` and keeps queue limited to the selected playlist.
-# rust-ytmusic-cli

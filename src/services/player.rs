@@ -1,8 +1,17 @@
-use std::{fs, io::{BufRead, BufReader, Write}, os::unix::net::UnixStream, path::PathBuf, process::Stdio};
+use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    os::unix::net::UnixStream,
+    path::PathBuf,
+    process::Stdio,
+};
 
 use anyhow::Context;
 use serde_json::json;
-use tokio::{process::{Child, Command}, time::{sleep, Duration}};
+use tokio::{
+    process::{Child, Command},
+    time::{sleep, Duration},
+};
 
 use crate::types::track::Track;
 
@@ -18,13 +27,21 @@ pub struct PlayerService {
 
 impl PlayerService {
     pub fn new() -> Self {
-        let socket_path = std::env::temp_dir().join(format!("ytmusic-cli-{}.sock", std::process::id()));
-        Self { child: None, socket_path, paused: false, volume: DEFAULT_VOLUME }
+        let socket_path =
+            std::env::temp_dir().join(format!("ytmusic-cli-{}.sock", std::process::id()));
+        Self {
+            child: None,
+            socket_path,
+            paused: false,
+            volume: DEFAULT_VOLUME,
+        }
     }
 
     pub async fn play(&mut self, track: &Track) -> anyhow::Result<()> {
         self.stop().await?;
-        let input = track.cached_path.as_ref()
+        let input = track
+            .cached_path
+            .as_ref()
             .map(|path| path.to_string_lossy().to_string())
             .unwrap_or_else(|| track.url());
 
@@ -34,7 +51,10 @@ impl PlayerService {
             .arg("--force-window=no")
             .arg("--terminal=no")
             .arg(format!("--volume={}", self.volume))
-            .arg(format!("--input-ipc-server={}", self.socket_path.to_string_lossy()))
+            .arg(format!(
+                "--input-ipc-server={}",
+                self.socket_path.to_string_lossy()
+            ))
             .arg(input)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -59,8 +79,12 @@ impl PlayerService {
         Ok(())
     }
 
-    pub fn is_paused(&self) -> bool { self.paused }
-    pub fn volume(&self) -> u8 { self.volume }
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+    pub fn volume(&self) -> u8 {
+        self.volume
+    }
 
     pub fn has_exited(&mut self) -> bool {
         let Some(child) = self.child.as_mut() else {
@@ -95,7 +119,8 @@ impl PlayerService {
 
     pub fn set_volume(&mut self, volume: u8) -> anyhow::Result<()> {
         self.volume = volume.min(100);
-        self.command(json!({ "command": ["set_property", "volume", self.volume] })).or(Ok(()))
+        self.command(json!({ "command": ["set_property", "volume", self.volume] }))
+            .or(Ok(()))
     }
 
     pub fn volume_up(&mut self) -> anyhow::Result<()> {
@@ -128,8 +153,9 @@ impl PlayerService {
     }
 
     fn command(&self, command: serde_json::Value) -> anyhow::Result<()> {
-        let mut stream = UnixStream::connect(&self.socket_path)
-            .with_context(|| format!("failed to connect mpv IPC: {}", self.socket_path.display()))?;
+        let mut stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!("failed to connect mpv IPC: {}", self.socket_path.display())
+        })?;
         let mut payload = serde_json::to_vec(&command)?;
         payload.push(b'\n');
         stream.write_all(&payload)?;
