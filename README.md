@@ -1,96 +1,270 @@
 # ytmusic-cli
 
-Rust terminal YouTube Music player using Ratatui, `rust-ytmusic-api`, mpv IPC, yt-dlp cache, queue, history, favorites, playlists, and synced lyrics.
+A terminal YouTube Music player built with Rust, Ratatui, mpv, yt-dlp, and [`rs-ytmusic-api`](https://crates.io/crates/rs-ytmusic-api).
 
-## Runtime dependencies
+This project provides a keyboard-driven TUI for searching, playing, caching, queuing, and managing YouTube Music tracks directly from the terminal.
+
+> This project is unofficial and is not affiliated with YouTube, Google, or YouTube Music.
+
+## Features
+
+- Search YouTube Music tracks
+- Play music with `mpv`
+- Cache audio with `yt-dlp`
+- Queue management
+- Non-destructive queue playback
+- Auto-refill queue using YouTube Music watch queue
+- Autoplay next track when the current track finishes
+- Playlist mode
+- Playlist-local queue playback
+- History
+- Favorites
+- Local playlists
+- Synced lyrics using LRCLIB
+- YouTube Music lyrics fallback
+- File-based lyrics cache
+- mpv IPC control
+- Keyboard-driven Ratatui interface
+
+## Requirements
+
+Install runtime dependencies:
 
 ```bash
 sudo pacman -S mpv yt-dlp
 ```
 
-## Run
+For other distributions:
+
+```bash
+# Debian / Ubuntu
+sudo apt install mpv yt-dlp
+
+# Fedora
+sudo dnf install mpv yt-dlp
+```
+
+## Installation
+
+From source:
+
+```bash
+git clone https://github.com/afadhili/rust-ytmusic-cli
+cd ytmusic-cli
+cargo install --path .
+```
+
+Or run directly:
 
 ```bash
 cargo run
 ```
 
-## Features
+## Dependencies
 
-- Search songs through `rust-ytmusic-api`
-- Play tracks with `mpv`
-- Control mpv through JSON IPC over Unix socket
-- Cache audio to `~/Music/ytmusic.cli` using `yt-dlp`
-- Queue with non-destructive playback index
-- First played track is inserted into the queue and becomes the active queue item
-- Auto queue refill when upcoming tracks after the current queue index are below 5
-- Autoplay next track when mpv reports the current track has finished
-- Auto queue mode refills from `fetch_watch_queue()` when the remaining upcoming list is below 5
-- Playlist playback mode stays limited to selected playlist tracks and never refills from YouTube Music
-- History and favorites saved locally
-- Local playlists saved locally
-- Lyrics tab with LRCLIB synced lyrics first, YouTube Music lyrics fallback second
-- Non-blocking lyrics fetch; the TUI stays responsive while lyrics load
-- File-based lyrics cache at `~/Music/ytmusic.cli/{video_id}-lyrics.txt`
-- Synced lyric line highlight based on mpv `time-pos`
+This project uses:
 
-## Lyrics behavior
+- [`ratatui`](https://crates.io/crates/ratatui) for terminal UI
+- [`crossterm`](https://crates.io/crates/crossterm) for terminal events
+- [`tokio`](https://crates.io/crates/tokio) for async runtime
+- [`rs-ytmusic-api`](https://crates.io/crates/rs-ytmusic-api) for YouTube Music metadata/search
+- `mpv` for playback
+- `yt-dlp` for audio caching
+- LRCLIB for synced lyrics
 
-Lyrics are resolved in this order:
+## Usage
 
-1. Local lyrics text file from `~/Music/ytmusic.cli/{video_id}-lyrics.txt`
-2. Legacy JSON cache from `~/.local/share/ytmusic-cli/lyrics.json` if it exists, then migrate to the text file cache
-3. LRCLIB `/api/get` with `track_name`, `artist_name`, and `duration`
-4. LRCLIB `/api/search` fallback
-5. YouTube Music lyrics through `rust-ytmusic-api`
+Start the TUI:
 
-LRCLIB synced lyrics are parsed from LRC timestamps and highlighted in the lyrics tab according to mpv playback position. Fetching runs in a Tokio task, so pressing `6` shows a loading message instead of freezing the UI.
-
-## Keybinds
-
-```txt
-/        search mode
-Enter    search / play selected
-1        search tab
-2        queue tab
-3        history tab
-4        favorites tab
-5        playlists tab
-6        lyrics tab
-Tab      switch playlist focus between playlist list and playlist tracks
-j/Down   next item
-k/Up     previous item
-J        move queue item down
-K        move queue item up
-a        enqueue selected
-n        next track
-b        previous track
-r        refill auto queue from current track
-f        toggle favorite
-p        add selected/current track to default playlist
-P        create playlist
-c        cache selected track
-Space    pause/resume
-s        stop
-h/Left   seek -5s
-l/Right  seek +5s
-+        volume up
--        volume down
-q/Esc    quit
+```bash
+ytmusic-cli
 ```
 
-## Data paths
+Or with Cargo:
+
+```bash
+cargo run
+```
+
+## Keybindings
+
+| Key | Action |
+|---|---|
+| `/` | Enter search mode |
+| `Enter` | Search or play selected item |
+| `j` / `Down` | Move selection down |
+| `k` / `Up` | Move selection up |
+| `1` | Search tab |
+| `2` | Queue tab |
+| `3` | History tab |
+| `4` | Favorites tab |
+| `5` | Playlists tab |
+| `6` | Lyrics tab |
+| `a` | Add selected track to queue |
+| `n` | Play next track |
+| `b` | Play previous track |
+| `d` | Remove selected queue/favorite item |
+| `J` | Move queue item down |
+| `K` | Move queue item up |
+| `f` | Toggle favorite |
+| `p` | Add selected track to default playlist |
+| `P` | Create playlist |
+| `c` | Cache selected track |
+| `r` | Refill auto queue |
+| `Space` | Pause/resume |
+| `s` | Stop playback |
+| `h` / `Left` | Seek backward |
+| `l` / `Right` | Seek forward |
+| `+` | Volume up |
+| `-` | Volume down |
+| `q` / `Esc` | Quit |
+
+## Cache
+
+Audio cache is stored in:
 
 ```txt
-~/.local/share/ytmusic-cli/history.json
-~/.local/share/ytmusic-cli/favorites.json
-~/.local/share/ytmusic-cli/playlists.json
-~/.local/share/ytmusic-cli/lyrics.json   # legacy/migration cache
+~/Music/ytmusic.cli/
+```
+
+Cached audio files are created using `yt-dlp`.
+
+The cache command uses metadata and thumbnail embedding when possible.
+
+## Lyrics Cache
+
+Lyrics are cached as plain text files in:
+
+```txt
 ~/Music/ytmusic.cli/{video_id}-lyrics.txt
-~/Music/ytmusic.cli/{video_id}.m4a
 ```
 
-## Auto queue dedupe
+Synced lyrics are stored in LRC format when available.
 
-Auto refill uses a session-level `queued_video_ids` set. A track that was already added to the queue, played in the current session, or exists in previous/current queue state will not be added again by `fetch_watch_queue()`.
+Lyrics priority:
 
-Playlist playback does not call `fetch_watch_queue()` and keeps queue limited to the selected playlist.
+1. Read local cache
+2. Fetch synced lyrics from LRCLIB
+3. Fallback to YouTube Music lyrics
+4. Save result to local cache
+
+## Queue Behavior
+
+The queue is non-destructive.
+
+When a track is played, it stays in the queue. Playback position is tracked with an internal queue index.
+
+Auto queue behavior:
+
+- The first played track is added to the queue
+- The queue is refilled when the number of tracks after the currently playing track is less than 5
+- Refill uses `fetch_watch_queue` from `rs-ytmusic-api`
+- Duplicate tracks are skipped
+- Tracks already played or already queued in the current session are not re-added
+
+Playlist mode behavior:
+
+- Playing from a playlist replaces the queue with that playlist's tracks
+- Autoplay only moves inside the playlist
+- YouTube Music watch queue refill is disabled in playlist mode
+
+## Data Storage
+
+Application data is stored in:
+
+```txt
+~/.local/share/ytmusic-cli/
+```
+
+Files:
+
+```txt
+history.json
+favorites.json
+playlists.json
+```
+
+Audio and lyrics cache are stored in:
+
+```txt
+~/Music/ytmusic.cli/
+```
+
+## Development
+
+Run:
+
+```bash
+cargo run
+```
+
+Check:
+
+```bash
+cargo check
+```
+
+Format:
+
+```bash
+cargo fmt
+```
+
+Clippy:
+
+```bash
+cargo clippy --all-targets
+```
+
+Build release:
+
+```bash
+cargo build --release
+```
+
+The compiled binary will be available at:
+
+```txt
+target/release/ytmusic-cli
+```
+
+## Project Structure
+
+```txt
+src/
+├── main.rs
+├── app.rs
+├── tui.rs
+├── services/
+│   ├── cache.rs
+│   ├── lyrics.rs
+│   ├── mod.rs
+│   ├── music.rs
+│   ├── player.rs
+│   └── storage.rs
+├── types/
+│   ├── lyrics.rs
+│   ├── mod.rs
+│   ├── playlist.rs
+│   └── track.rs
+└── ui/
+    └── mod.rs
+```
+
+## Notes
+
+This project depends on YouTube Music's internal API through `rs-ytmusic-api`.
+
+YouTube Music response structures may change over time. If search, lyrics, queue, or metadata parsing breaks, update `rs-ytmusic-api` first.
+
+## Disclaimer
+
+This project is unofficial.
+
+YouTube Music is a trademark of Google LLC. This project is not affiliated with Google, YouTube, or YouTube Music.
+
+Use responsibly and respect YouTube's Terms of Service.
+
+## License
+
+GPL-3.0
