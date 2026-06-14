@@ -4,10 +4,14 @@ version = "0.3.0"
 edition = "2021"
 description = "A terminal YouTube Music player built with Rust, Ratatui, mpv, yt-dlp, and rs-ytmusic-api"
 license = "GPL-3.0"
-repository = "https://github.com/afadhili/ytmusic-cli"
+repository = "https://github.com/afadhili/rust-ytmusic-cli"
 readme = "README.md"
 keywords = ["youtube", "music", "cli", "tui", "ratatui"]
 categories = ["command-line-utilities", "multimedia::audio"]
+
+[[bin]]
+name = "ytmusic-cli"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
@@ -17,12 +21,12 @@ ratatui = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-
-# YouTube Music API client
 rs-ytmusic-api = "0.1.0"
-
-# HTTP client for LRCLIB synced lyrics
-reqwest = { version = "0.12", default-features = false, features = ["json", "gzip", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "gzip",
+  "rustls-tls",
+] }
 
 [profile.release]
 strip = true
