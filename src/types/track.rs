@@ -9,6 +9,7 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub duration: Option<u64>,
+    #[serde(skip)]
     pub thumbnail_url: Option<String>,
     #[serde(skip)]
     pub cached_path: Option<PathBuf>,

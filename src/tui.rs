@@ -1,8 +1,8 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Modifier, Style, Color},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap, LineGauge},
     Frame,
 };
 
@@ -18,7 +18,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .constraints([
             Constraint::Length(3),
             Constraint::Min(8),
-            Constraint::Length(6),
+            Constraint::Length(8),
             Constraint::Length(3),
         ])
         .split(area);
@@ -65,15 +65,15 @@ fn draw_main(frame: &mut Frame, app: &App, area: Rect) {
         Screen::Queue => draw_track_list(
             frame,
             " Queue ",
-            app.queue.iter().collect::<Vec<_>>(),
-            app.queue_selected,
-            app.queue_index,
+            app.queue_state.queue.iter().collect::<Vec<_>>(),
+            app.queue_state.queue_selected,
+            app.queue_state.queue_index,
             area,
         ),
         Screen::History => draw_track_list(
             frame,
             " History ",
-            app.history.iter().collect::<Vec<_>>(),
+            app.library_state.history.iter().collect::<Vec<_>>(),
             app.selected,
             None,
             area,
@@ -81,7 +81,7 @@ fn draw_main(frame: &mut Frame, app: &App, area: Rect) {
         Screen::Favorites => draw_track_list(
             frame,
             " Favorites ",
-            app.favorites.iter().collect::<Vec<_>>(),
+            app.library_state.favorites.iter().collect::<Vec<_>>(),
             app.selected,
             None,
             area,
@@ -164,17 +164,18 @@ fn draw_playlists(frame: &mut Frame, app: &App, area: Rect) {
         .constraints([Constraint::Percentage(32), Constraint::Percentage(68)])
         .split(area);
 
-    let left_title = match app.playlist_focus {
+    let left_title = match app.library_state.playlist_focus {
         PlaylistFocus::List => " Playlists [focused] - Tab tracks ",
         PlaylistFocus::Tracks => " Playlists - Tab list ",
     };
 
     let playlist_items: Vec<ListItem> = app
+        .library_state
         .playlists
         .iter()
         .enumerate()
         .map(|(i, playlist)| {
-            let marker = if i == app.playlist_selected {
+            let marker = if i == app.library_state.playlist_selected {
                 "›"
             } else {
                 " "
@@ -191,8 +192,12 @@ fn draw_playlists(frame: &mut Frame, app: &App, area: Rect) {
         List::new(playlist_items).block(Block::default().title(left_title).borders(Borders::ALL));
     frame.render_widget(left, chunks[0]);
 
-    if let Some(playlist) = app.playlists.get(app.playlist_selected) {
-        let right_title = match app.playlist_focus {
+    if let Some(playlist) = app
+        .library_state
+        .playlists
+        .get(app.library_state.playlist_selected)
+    {
+        let right_title = match app.library_state.playlist_focus {
             PlaylistFocus::Tracks => {
                 format!(" {} [focused] - Enter play playlist queue ", playlist.name)
             }
@@ -202,7 +207,7 @@ fn draw_playlists(frame: &mut Frame, app: &App, area: Rect) {
             frame,
             &right_title,
             playlist.tracks.iter().collect(),
-            app.playlist_track_selected,
+            app.library_state.playlist_track_selected,
             None,
             chunks[1],
         );
@@ -218,7 +223,7 @@ fn draw_playlists(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_lyrics(frame: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
 
-    if let Some(lyrics) = &app.lyrics {
+    if let Some(lyrics) = &app.lyrics_state.lyrics {
         let kind = if lyrics.instrumental {
             "instrumental"
         } else if lyrics.is_synced() {
@@ -239,9 +244,9 @@ fn draw_lyrics(frame: &mut Frame, app: &App, area: Rect) {
         let start = if lyrics.is_synced() {
             active
                 .map(|index| index.saturating_sub(height / 2))
-                .unwrap_or(app.lyrics_scroll)
+                .unwrap_or(app.lyrics_state.lyrics_scroll)
         } else {
-            app.lyrics_scroll
+            app.lyrics_state.lyrics_scroll
         };
 
         for (index, line) in display_lines
@@ -258,8 +263,10 @@ fn draw_lyrics(frame: &mut Frame, app: &App, area: Rect) {
 
             lines.push(Line::from(Span::styled(line, style)));
         }
-    } else if app.lyrics_loading {
+    } else if app.lyrics_state.is_loading() {
+        } else if app.lyrics_state.is_loading() {
         let track = app
+            .queue_state
             .now_playing
             .as_ref()
             .map(|track| track.label())
@@ -280,8 +287,35 @@ fn draw_lyrics(frame: &mut Frame, app: &App, area: Rect) {
     );
 }
 
+fn draw_progress_bar(app: &App) -> LineGauge<'static> {
+    let pos = app.player.position().unwrap_or(0.0);
+    let dur = app.player.duration()
+        .or_else(|| app.queue_state.now_playing.as_ref().and_then(|t| t.duration.map(|d| d as f64)))
+        .unwrap_or(0.0);
+    let ratio = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) } else { 0.0 };
+    LineGauge::default()
+            .ratio(ratio)
+            .line_set(ratatui::symbols::line::THICK)
+            .filled_style(Style::default().fg(Color::Cyan))
+            .unfilled_style(Style::default().fg(Color::DarkGray))
+}
+
 fn draw_now_playing(frame: &mut Frame, app: &App, area: Rect) {
-    let content = if let Some(track) = &app.now_playing {
+    let outer_block = Block::default();
+
+    // Calculate inner drawable region after borders
+    let inner_area = outer_block.inner(area);
+    frame.render_widget(outer_block, area);
+
+    // 2. Split inner space: Paragraph gets flexible remaining space, Gauge needs EXACTLY 2 rows
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(6),
+            Constraint::Length(2),
+        ])
+        .split(inner_area);
+    let content = if let Some(track) = &app.queue_state.now_playing {
         vec![
             Line::from(vec![Span::raw("Title : "), Span::raw(track.title.clone())]),
             Line::from(vec![Span::raw("Artist: "), Span::raw(track.artist.clone())]),
@@ -297,9 +331,9 @@ fn draw_now_playing(frame: &mut Frame, app: &App, area: Rect) {
                 Span::raw("Queue : "),
                 Span::raw(format!(
                     "{} track(s), source: {}, index: {}",
-                    app.queue.len(),
+                    app.queue_state.queue.len(),
                     app.queue_source_label(),
-                    app.queue_index.map(|i| i + 1).unwrap_or(0)
+                    app.queue_state.queue_index.map(|i| i + 1).unwrap_or(0)
                 )),
             ]),
             Line::from(vec![
@@ -325,8 +359,9 @@ fn draw_now_playing(frame: &mut Frame, app: &App, area: Rect) {
                     .borders(Borders::ALL),
             )
             .wrap(Wrap { trim: true }),
-        area,
+        chunks[0],
     );
+    frame.render_widget(draw_progress_bar(app), chunks[1]);
 }
 
 fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
